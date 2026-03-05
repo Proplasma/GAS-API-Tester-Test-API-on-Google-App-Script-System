@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+  <style>
+    body { background: #ececec; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
+    .win-header { 
+      background: #333; color: white; padding: 8px 15px; 
+      display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .min-btn { cursor: pointer; padding: 0 10px; font-size: 18px; line-height: 1; }
+    .main-container { padding: 15px; transition: all 0.2s ease; }
+    .hidden { display: none !important; }
+    
+    /* Code Viewer Style */
+    .json-display {
+      background: #1e1e1e; color: #d4d4d4; padding: 15px; 
+      border-radius: 6px; min-height: 480px; overflow: auto; 
+      font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+      white-space: pre-wrap; word-wrap: break-word;
+    }
+    .toolbar { margin-bottom: 10px; display: flex; gap: 10px; }
+  </style>
+</head>
+<body>
+  <div class="win-header">
+    <span>🔍 JSON Pro Viewer</span>
+    <div class="min-btn" id="toggleIcon" onclick="handleToggle()">—</div>
+  </div>
+
+  <div id="contentBody" class="main-container">
+    <div class="toolbar">
+      <button class="btn btn-primary btn-sm" onclick="copyToClipboard()">📋 Sao chép Raw</button>
+      <button class="btn btn-outline-dark btn-sm" onclick="google.script.host.close()">❌ Đóng</button>
+    </div>
+    
+    <pre id="jsonOutput" class="json-display">Đang tải dữ liệu...</pre>
+  </div>
+
+  <script>
+    let isMinimized = false;
+    // Lấy dữ liệu từ Server gửi xuống thông qua Template
+    const rawData = `<?!= jsonData ?>`; 
+
+    window.onload = () => {
+      formatContent();
+    };
+
+    function formatContent() {
+      const output = document.getElementById('jsonOutput');
+      try {
+        // Cố gắng parse thành JSON để format đẹp
+        const parsed = JSON.parse(rawData);
+        output.innerText = JSON.stringify(parsed, null, 4); // Thụt lề 4 dấu cách
+      } catch (e) {
+        // Nếu không phải JSON (văn bản thuần), hiển thị bình thường
+        output.innerText = rawData;
+      }
+    }
+
+    function handleToggle() {
+      const content = document.getElementById('contentBody');
+      const icon = document.getElementById('toggleIcon');
+      if (!isMinimized) {
+        content.classList.add('hidden');
+        icon.innerText = "▢";
+        google.script.host.setHeight(45);
+      } else {
+        content.classList.remove('hidden');
+        icon.innerText = "—";
+        google.script.host.setHeight(600);
+      }
+      isMinimized = !isMinimized;
+    }
+
+    function copyToClipboard() {
+      const el = document.createElement('textarea');
+      el.value = rawData;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      alert("Đã sao chép nội dung gốc vào bộ nhớ tạm!");
+    }
+  </script>
+</body>
+</html>
