@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+  <style>
+    body { background: #ececec; font-family: 'Segoe UI', sans-serif; font-size: 12px; margin:0; overflow-x: hidden; }
+    .win-header { background: #333; color: white; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+    .min-btn { cursor: pointer; padding: 0 10px; font-size: 18px; line-height: 1; }
+    .main-container { padding: 10px; transition: all 0.2s ease; }
+    .card { border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .console { background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 4px; height: 180px; overflow: auto; font-family: monospace; }
+    .shopee-box { background: #fff3e0; border: 1px solid #ffcc80; padding: 8px; border-radius: 5px; margin-bottom: 10px; }
+    .hidden { display: none !important; }
+    .btn-xs { padding: 2px 5px; font-size: 10px; }
+  </style>
+</head>
+<body>
+  <div class="win-header">
+    <span>🚀 Super API Tester Pro v1.2.1</span>
+    <div class="min-btn" id="toggleIcon" onclick="handleToggle()">—</div>
+  </div>
+
+  <div id="contentBody" class="main-container">
+    <div class="shopee-box">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <b>🟠 Shopee Auth & Env</b>
+        <div>
+          <button class="btn btn-dark btn-xs" onclick="saveKeys()">Lưu Key</button>
+          <button class="btn btn-warning btn-xs" onclick="applyShopeeAuth()">Apply Sign</button>
+        </div>
+      </div>
+      <div class="row g-1">
+        <div class="col-4"><input type="text" id="p_id" class="form-control form-control-sm" placeholder="PartnerID"></div>
+        <div class="col-8"><input type="password" id="p_key" class="form-control form-control-sm" placeholder="PartnerKey"></div>
+      </div>
+    </div>
+
+    <div class="card p-3">
+      <div class="d-flex mb-2 gap-1">
+        <button class="btn btn-dark btn-sm" onclick="handleImport()">📥 Import cURL</button>
+        <button class="btn btn-primary btn-sm" id="sendBtn" onclick="runTester()">🚀 Send</button>
+        <button class="btn btn-info btn-sm text-white" id="saveBtn" onclick="saveToSheet()" disabled>💾 Save</button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="formatJsonFields()">✨ Format</button>
+        <button class="btn btn-outline-danger btn-sm" onclick="resetForm()">Clear</button>
+      </div>
+
+      <div class="row g-1 mb-2">
+        <div class="col-3"><select id="method" class="form-select form-select-sm">
+          <option value="GET">GET</option><option value="POST">POST</option>
+          <option value="PUT">PUT</option><option value="DELETE">DELETE</option>
+        </select></div>
+        <div class="col-9"><input type="text" id="url" class="form-control form-control-sm" placeholder="URL {{env}}"></div>
+      </div>
+
+      <textarea id="headers" class="form-control form-control-sm mb-1" rows="2" placeholder='Headers (JSON)'></textarea>
+      <textarea id="body" class="form-control form-control-sm mb-1" rows="2" placeholder='Body / Payload'></textarea>
+
+      <div id="statusInfo" class="mt-2" style="font-size: 11px;"></div>
+      <pre id="output" class="console">Ready...</pre>
+    </div>
+  </div>
+
+  <?!= HtmlService.createHtmlOutputFromFile('Parser').getContent(); ?>
+
+  <script>
+    let isMinimized = false;
+    let lastResult = null;
+    let envVars = {};
+
+    window.onload = () => {
+      google.script.run.withSuccessHandler(keys => {
+        document.getElementById('p_id').value = keys.pId;
+        document.getElementById('p_key').value = keys.pKey;
+      }).getStoredKeys();
+      google.script.run.withSuccessHandler(env => { envVars = env; }).getEnvVariables();
+    };
+
+    function handleToggle() {
+      const content = document.getElementById('contentBody');
+      const icon = document.getElementById('toggleIcon');
+      if (!isMinimized) {
+        content.classList.add('hidden');
+        icon.innerText = "▢";
+        google.script.host.setHeight(45);
+      } else {
+        content.classList.remove('hidden');
+        icon.innerText = "—";
+        google.script.host.setHeight(700);
+      }
+      isMinimized = !isMinimized;
+    }
+
+    function formatJsonFields() {
+      try {
+        const h = document.getElementById('headers');
+        if(h.value) h.value = JSON.stringify(JSON.parse(h.value), null, 2);
+        const b = document.getElementById('body');
+        if(b.value) b.value = JSON.stringify(JSON.parse(b.value), null, 2);
+      } catch(e) { alert("Dữ liệu không phải JSON hợp lệ!"); }
+    }
+
+    function saveKeys() {
+      google.script.run.withSuccessHandler(m => alert(m))
+        .storeKeys(document.getElementById('p_id').value, document.getElementById('p_key').value);
+    }
+
+    function applyShopeeAuth() {
+      const pId = document.getElementById('p_id').value;
+      const pKey = document.getElementById('p_key').value;
+      let urlStr = document.getElementById('url').value;
+      urlStr = replaceEnvVars(urlStr, envVars);
+      try {
+        const u = new URL(urlStr);
+        google.script.run.withSuccessHandler(res => {
+          u.searchParams.set("partner_id", pId);
+          u.searchParams.set("timestamp", res.timestamp);
+          u.searchParams.set("sign", res.sign);
+          document.getElementById('url').value = u.toString();
+          log("> Đã cập nhật Signature.");
+        }).getShopeeAuth(pId, pKey, u.pathname, u.searchParams.get("shop_id"));
+      } catch(e) { alert("URL không hợp lệ!"); }
+    }
+
+    function handleImport() {
+      const raw = prompt("Dán cURL:");
+      if (!raw) return;
+      const p = parseCurl(raw);
+      document.getElementById('url').value = p.url;
+      document.getElementById('method').value = p.method;
+      try {
+        document.getElementById('headers').value = JSON.stringify(p.headers, null, 2);
+        document.getElementById('body').value = p.data ? JSON.stringify(JSON.parse(p.data), null, 2) : "";
+      } catch(e) {
+        document.getElementById('headers').value = JSON.stringify(p.headers);
+        document.getElementById('body').value = p.data;
+      }
+      log("> Import xong. Method: " + p.method);
+    }
+
+    function runTester() {
+      const btn = document.getElementById('sendBtn');
+      btn.disabled = true;
+      log("> Processing...");
+      const rawUrl = document.getElementById('url').value;
+      const rawHeaders = document.getElementById('headers').value;
+      const rawBody = document.getElementById('body').value;
+      const req = {
+        url: replaceEnvVars(rawUrl, envVars),
+        method: document.getElementById('method').value,
+        headers: JSON.parse(replaceEnvVars(rawHeaders, envVars) || "{}"),
+        payload: replaceEnvVars(rawBody, envVars)
+      };
+      google.script.run.withSuccessHandler(res => {
+        btn.disabled = false;
+        document.getElementById('saveBtn').disabled = false;
+        // LƯU ĐẦY ĐỦ THÔNG TIN ĐỂ GHI SHEET
+        lastResult = { 
+          method: req.method, 
+          url: req.url, 
+          headers: req.headers,
+          payload: req.payload, 
+          status: res.status, 
+          response: res.body 
+        };
+        renderResponse(res);
+      }).executeApiRequest(req);
+    }
+
+    function renderResponse(res) {
+      const color = res.success ? '#4ec9b0' : '#f44336';
+      document.getElementById('statusInfo').innerHTML = `<b style="color:${color}">Status: ${res.status} | ${res.time}ms</b>`;
+      try {
+        document.getElementById('output').innerText = JSON.stringify(JSON.parse(res.body), null, 2);
+      } catch(e) { document.getElementById('output').innerText = res.body || res.error; }
+    }
+
+    function saveToSheet() {
+      google.script.run.withSuccessHandler(() => alert("Đã lưu vào History!")).saveRequestToSheet(lastResult);
+    }
+
+    function log(m) { document.getElementById('output').innerText = m; }
+    function resetForm() { document.querySelectorAll('input, textarea').forEach(e => e.value = ''); }
+  </script>
+</body>
+</html>
